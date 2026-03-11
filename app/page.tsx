@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useTransition } from 'react';
+import { useActionState, useState, useTransition, useEffect } from 'react'; // Ajout de useEffect
 import { LayoutDashboard, ArrowRight, AlertCircle, Loader2, Rocket, UserCircle2, Mail, Lock, Building2, ShieldCheck } from 'lucide-react';
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -13,6 +13,24 @@ export default function PortailAcces() {
   const router = useRouter();
   const [state, formAction, isPending] = useActionState(creerEspace, null);
 
+  // --- SÉCURITÉ ANTI-RETOUR (CACHE & HISTORIQUE) ---
+  useEffect(() => {
+    // 1. On injecte un nouvel état dans l'historique immédiatement
+    window.history.pushState(null, "", window.location.href);
+
+    const stopBack = () => {
+      // 2. Si l'utilisateur clique sur "retour", on le force à rester ici
+      window.history.pushState(null, "", window.location.href);
+    };
+
+    window.addEventListener("popstate", stopBack);
+
+    return () => {
+      window.removeEventListener("popstate", stopBack);
+    };
+  }, []);
+  // --------------------------------------------------
+
   const handleLogin = async (formData: FormData) => {
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
@@ -23,7 +41,8 @@ export default function PortailAcces() {
       if (result?.error) {
         setLoginError("Email ou mot de passe incorrect.");
       } else {
-        router.push("/dashboard");
+        // Utilisation de replace pour ne pas laisser de trace de la page login dans la pile
+        router.replace("/dashboard");
         router.refresh();
       }
     });
@@ -36,8 +55,7 @@ export default function PortailAcces() {
 
   return (
     <div className="min-h-screen bg-[#0F172A] flex flex-col font-sans text-slate-200 relative overflow-hidden">
-
-      {/* BACKGROUND DYNAMIQUE : Supprime l'effet "fade" */}
+      {/* BACKGROUND DYNAMIQUE */}
       <div className="absolute inset-0 -z-10">
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-600/10 rounded-full blur-[120px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-600/10 rounded-full blur-[120px]" />
@@ -60,10 +78,9 @@ export default function PortailAcces() {
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center p-6 z-10">
-
         <div className="max-w-4xl w-full grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
 
-          {/* COLONNE GAUCHE : Texte & Argumentaire */}
+          {/* COLONNE GAUCHE */}
           <div className="space-y-8 text-center lg:text-left animate-in slide-in-from-left-8 duration-700">
             <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 px-4 py-2 rounded-full">
               <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
@@ -80,13 +97,12 @@ export default function PortailAcces() {
             </p>
           </div>
 
-          {/* COLONNE DROITE : La Carte de Formulaire */}
+          {/* COLONNE DROITE : Formulaire */}
           <div className="relative">
             <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-[3rem] blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
-
             <div className="relative bg-white rounded-[3rem] shadow-2xl overflow-hidden p-8 md:p-12">
 
-              {/* Toggle Inscription/Connexion */}
+              {/* Toggle */}
               <div className="flex p-1.5 bg-slate-100 rounded-[2rem] mb-10 border border-slate-200 shadow-inner">
                 <button
                   type="button"
