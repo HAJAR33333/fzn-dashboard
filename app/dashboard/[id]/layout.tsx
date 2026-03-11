@@ -5,16 +5,17 @@ import { notFound } from "next/navigation";
 import { LayoutDashboard, LogOut, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import SidebarLinks from "./clients/_components/SidebarLinks";
+import LogoutButton from "./_components/LogoutButton";
 
 // Force le rendu dynamique pour garantir que les données Prisma sont fraîches à chaque refresh
 export const dynamic = "force-dynamic";
 
-export default async function DashboardLayout({ 
-  children, 
-  params 
-}: { 
-  children: React.ReactNode, 
-  params: Promise<{ id: string }> 
+export default async function DashboardLayout({
+  children,
+  params
+}: {
+  children: React.ReactNode,
+  params: Promise<{ id: string }>
 }) {
   const { id } = await params;
 
@@ -40,7 +41,7 @@ export default async function DashboardLayout({
 
   // Identification de l'exercice marqué comme actif "isActif: true"
   const exerciceActifObj = tousLesExercices.find(ex => ex.isActif);
-  
+
   // Valeur de secours si aucun exercice n'est trouvé
   const anneeCivileActuelle = new Date().getFullYear().toString();
 
@@ -55,7 +56,7 @@ export default async function DashboardLayout({
     <div className="flex min-h-screen bg-[#F4F7FE] overflow-x-hidden font-sans text-slate-700">
       {/* Sidebar fixe à gauche */}
       <aside className="w-80 bg-white border-r border-slate-200/60 hidden md:flex flex-col p-7 fixed h-full z-50 overflow-y-auto">
-        
+
         {/* Logo Section */}
         <div className="flex items-center gap-3 mb-10 px-2">
           <div className="bg-slate-900 p-2.5 rounded-xl shadow-lg shadow-slate-950/20">
@@ -80,9 +81,9 @@ export default async function DashboardLayout({
             - exercices: La liste propre sans les anciennes valeurs.
             - exerciceActif: Le code réel en DB pour forcer la mise à jour du label.
         */}
-        <ExerciceSwitcher 
-          exercices={listeExercicesFinal} 
-          exerciceActif={exerciceActifObj?.code || anneeCivileActuelle} 
+        <ExerciceSwitcher
+          exercices={listeExercicesFinal}
+          exerciceActif={exerciceActifObj?.code || anneeCivileActuelle}
         />
 
         {/* Navigation Links Section */}
@@ -93,15 +94,7 @@ export default async function DashboardLayout({
 
         {/* Footer Sidebar (Logout) */}
         <div className="mt-auto pt-6 border-t border-slate-100">
-          <Link href="/" className="flex items-center justify-between group p-3 rounded-2xl bg-slate-50 hover:bg-red-50 transition-all active:scale-[0.98]">
-            <div className="flex items-center gap-3">
-              <div className="bg-white p-2 rounded-lg shadow-sm group-hover:text-red-600 transition-colors text-slate-400 border border-slate-100 group-hover:border-red-100">
-                <LogOut size={18} />
-              </div>
-              <span className="font-bold text-sm text-slate-600 group-hover:text-red-600">Quitter l'espace</span>
-            </div>
-            <ChevronRight size={14} className="text-slate-300 group-hover:text-red-300" />
-          </Link>
+          <LogoutButton />
         </div>
       </aside>
 
