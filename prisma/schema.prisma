@@ -1,0 +1,125 @@
+// generator et datasource
+generator client {
+  provider = "prisma-client-js"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// 1. Modèle Utilisateur
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  nom       String?
+  createdAt DateTime @default(now())
+  espaces   Espace[]
+}
+
+// 2. Gestion Multi-Sociétés (Espaces)
+model Espace {
+  id        String     @id @default(cuid())
+  nom       String
+  siret     String     @unique
+  couleur   String?    @default("#3b82f6")
+  createdAt DateTime   @default(now())
+  
+  exercices Exercice[]
+  clients   Client[]
+  factures  Facture[]  // Relation ajoutée pour centraliser les documents de l'espace
+
+  userId    String?
+  user      User?      @relation(fields: [userId], references: [id])
+}
+
+// 3. Exercice Comptable
+model Exercice {
+  id        String    @id @default(cuid())
+  code      String    // ex: 2025
+  dateDebut DateTime
+  dateFin   DateTime
+  isActif   Boolean   @default(false)
+  
+  espaceId  String
+  espace    Espace    @relation(fields: [espaceId], references: [id])
+  
+  factures  Facture[] // Relation pour l'agrégation des données financières
+
+  @@unique([code, espaceId]) 
+}
+
+// 4. Modèle Client
+model Client {
+  id             String   @id @default(cuid())
+  nom            String   // Nom de l'entreprise
+  formeJuridique String?
+  contactPrenom  String?
+  contactNom     String?
+  adresse        String?
+  codePostal     String?
+  ville          String?
+  pays           String?  @default("France")
+  siret          String?
+  email          String?
+  telephone      String?
+  statutClient   String?  // ex: Prospect, Client actif, etc.
+  
+  espaceId       String
+  espace         Espace   @relation(fields: [espaceId], references: [id])
+  factures       Facture[]
+}
+
+// 5. NOUVEAU : Modèle Devis & Factures (Gestion Commerciale)
+model Facture {
+  id            String         @id @default(cuid())
+  numero        String         // ex: DEV-2025-001
+  type          DocumentType   @default(DEVIS) // Bascule de DEVIS à FACTURE ici
+  statut        StatutFacture  @default(BROUILLON)
+  dateEmission  DateTime       @default(now())
+  dateEcheance  DateTime?
+  
+  // Montants globaux
+  montantHT     Float          @default(0)
+  tva           Float          @default(20)
+
+  // Liaisons obligatoires selon votre logique
+  espaceId      String
+  espace        Espace         @relation(fields: [espaceId], references: [id])
+  
+  clientId      String
+  client        Client         @relation(fields: [clientId], references: [id])
+  
+  exerciceId    String
+  exercice      Exercice       @relation(fields: [exerciceId], references: [id])
+
+  lignes        LigneFacture[] // Détail des prestations
+  
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+// 6. NOUVEAU : Détail des lignes du document
+model LigneFacture {
+  id           String  @id @default(cuid())
+  designation  String
+  quantite     Float   @default(1)
+  prixUnitaire Float
+  
+  factureId    String
+  facture      Facture @relation(fields: [factureId], references: [id], onDelete: Cascade)
+}
+
+// Enums pour sécuriser les types et statuts
+enum DocumentType {
+  DEVIS
+  FACTURE
+}
+
+enum StatutFacture {
+  BROUILLON // Uniquement pour Devis
+  VALIDE    // Transformé en Facture, à payer
+  PAYE      // Encaissé -> Alimente le Dashboard
+  ANNULE
+}
