@@ -48,6 +48,7 @@ model Exercice {
   factures  Facture[] // Relation pour l'agrégation des données financières
 
   @@unique([code, espaceId]) 
+  objectif  Float    @default(0)
 }
 
 // 4. Modèle Client

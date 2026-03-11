@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { 
-  TrendingUp, Users, Zap, 
-  ArrowUpRight, Activity, FileText 
+import {
+  TrendingUp, Users, Zap,
+  ArrowUpRight, Activity, FileText
 } from 'lucide-react';
-import ExerciceAlerte from "./_components/ExerciceAlerte"; 
+import ExerciceAlerte from "./_components/ExerciceAlerte";
 
 // On force le rafraîchissement pour éviter les problèmes de cache à la création
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ export default async function DashboardReel({ params, searchParams }: Props) {
   // 1. CHARGEMENT DES DONNÉES RÉELLES EN PARALLÈLE
   const [espace, statsCA, nbClients, nbDevis, exerciceActif] = await Promise.all([
     prisma.espace.findUnique({ where: { id } }),
-    
+
     // Calcul du CA Réel
     prisma.facture.aggregate({
       where: {
@@ -60,17 +60,17 @@ export default async function DashboardReel({ params, searchParams }: Props) {
   const doitAfficherAlerte = !exerciceActif || nouveau === "true";
 
   const totalCA = statsCA._sum.montantHT || 0;
-  const objectif = 50000;
+  const objectif = exerciceActif?.objectif || 5000;
   const pourcentageAtteint = Math.min(Math.round((totalCA / objectif) * 100), 100);
 
   return (
     <div className="p-6 md:p-10 bg-[#F8FAFF] min-h-screen space-y-10 font-sans text-slate-900">
-      
+
       {/* CORRECTION ICI : Passage de la propriété 'exercice' requise par le composant */}
       {doitAfficherAlerte && (
-        <ExerciceAlerte 
-          espaceId={id} 
-          exercice={exerciceActif} 
+        <ExerciceAlerte
+          espaceId={id}
+          exercice={exerciceActif}
         />
       )}
 
@@ -87,11 +87,11 @@ export default async function DashboardReel({ params, searchParams }: Props) {
         </div>
 
         <div className="flex items-center gap-3">
-          <Link 
+          <Link
             href={`/dashboard/${id}/gestion`}
             className="bg-white border border-slate-200 hover:border-indigo-600 text-slate-700 px-6 py-3 rounded-2xl font-bold shadow-sm transition-all flex items-center gap-2 group"
           >
-            <FileText size={18} className="text-slate-400 group-hover:text-indigo-600 transition-colors" /> 
+            <FileText size={18} className="text-slate-400 group-hover:text-indigo-600 transition-colors" />
             Gérer les Devis
           </Link>
 
@@ -103,26 +103,26 @@ export default async function DashboardReel({ params, searchParams }: Props) {
 
       {/* STATS CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <StatCard 
-          label="Chiffre d'Affaires" 
-          value={`${totalCA.toLocaleString('fr-FR')} €`} 
-          trend="Encaissé" 
-          color="from-blue-600 to-indigo-700" 
-          icon={<TrendingUp />} 
+        <StatCard
+          label="Chiffre d'Affaires"
+          value={`${totalCA.toLocaleString('fr-FR')} €`}
+          trend="Encaissé"
+          color="from-blue-600 to-indigo-700"
+          icon={<TrendingUp />}
         />
-        <StatCard 
-          label="Portefeuille Clients" 
-          value={nbClients.toString()} 
-          trend="Total fiches" 
-          color="from-slate-800 to-slate-950" 
-          icon={<Users />} 
+        <StatCard
+          label="Portefeuille Clients"
+          value={nbClients.toString()}
+          trend="Total fiches"
+          color="from-slate-800 to-slate-950"
+          icon={<Users />}
         />
-        <StatCard 
-          label="Devis en attente" 
-          value={nbDevis.toString()} 
-          trend="À convertir" 
-          color="from-orange-500 to-red-600" 
-          icon={<FileText />} 
+        <StatCard
+          label="Devis en attente"
+          value={nbDevis.toString()}
+          trend="À convertir"
+          color="from-orange-500 to-red-600"
+          icon={<FileText />}
         />
       </div>
 
@@ -136,12 +136,12 @@ export default async function DashboardReel({ params, searchParams }: Props) {
           <div className="flex items-end justify-between h-64 gap-3">
             {[60, 40, 95, 70, 55, 85, 100, 75, 50, 90, 65, 80].map((h, i) => (
               <div key={i} className="flex-1 flex flex-col items-center gap-3 group">
-                <div 
-                  style={{ height: `${h}%` }} 
+                <div
+                  style={{ height: `${h}%` }}
                   className="w-full bg-slate-100 group-hover:bg-gradient-to-t group-hover:from-indigo-600 group-hover:to-blue-400 rounded-2xl transition-all duration-500 shadow-sm"
                 />
                 <span className="text-[10px] font-black text-slate-400 group-hover:text-indigo-600 transition-colors">
-                    {['J','F','M','A','M','J','J','A','S','O','N','D'][i]}
+                  {['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'][i]}
                 </span>
               </div>
             ))}
@@ -154,10 +154,10 @@ export default async function DashboardReel({ params, searchParams }: Props) {
           <div className="relative w-56 h-56">
             <svg className="w-full h-full transform -rotate-90">
               <circle cx="112" cy="112" r="90" stroke="#1e293b" strokeWidth="18" fill="transparent" />
-              <circle 
-                cx="112" cy="112" r="90" 
-                stroke="url(#dashboardGradient)" strokeWidth="18" fill="transparent" 
-                strokeDasharray="565" strokeDashoffset={565 * (1 - pourcentageAtteint / 100)} 
+              <circle
+                cx="112" cy="112" r="90"
+                stroke="url(#dashboardGradient)" strokeWidth="18" fill="transparent"
+                strokeDasharray="565" strokeDashoffset={565 * (1 - pourcentageAtteint / 100)}
                 strokeLinecap="round"
                 className="transition-all duration-1000 ease-out"
               />

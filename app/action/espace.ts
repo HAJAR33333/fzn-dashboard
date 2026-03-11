@@ -79,31 +79,29 @@ export async function creerEspace(prevState: any, formData: FormData) {
 }
 
 export async function modifierOuCreerExerciceAction(formData: FormData) {
-  const id = formData.get("id") as string; // ID de l'exercice si modification
-  const espaceId = formData.get("espaceId") as string;
+  const id = formData.get("id")?.toString();
+  const espaceId = formData.get("espaceId")?.toString();
   const dateDebutStr = formData.get("dateDebut") as string;
+  const objectifStr = formData.get("objectif") as string;
 
   const dateDebut = new Date(dateDebutStr);
-
-  // RÈGLE : Calcul automatique de la date de fin (Date début + 12 mois - 1 jour)
-  // Exemple : 01/01/2024 -> 31/12/2024
   const dateFin = subDays(addMonths(dateDebut, 12), 1);
-
-  // RÈGLE : Le code prend l'année de la date de FIN
   const code = getYear(dateFin).toString();
+  const objectif = parseFloat(objectifStr) || 0;
 
-  if (id) {
-    // Modification
+  if (id && id !== "undefined" && id !== "") {
+    // 1. MISE À JOUR
     await prisma.exercice.update({
       where: { id },
-      data: {
-        dateDebut,
-        dateFin,
-        code,
-      },
+      data: { dateDebut, dateFin, code, objectif },
     });
-  } else {
-    // Création (on s'assure qu'il est actif)
+  } else if (espaceId) {
+    // 2. CRÉATION (Sécurité : désactiver les autres exercices avant)
+    await prisma.exercice.updateMany({
+      where: { espaceId },
+      data: { isActif: false }
+    });
+
     await prisma.exercice.create({
       data: {
         espaceId,
@@ -111,11 +109,12 @@ export async function modifierOuCreerExerciceAction(formData: FormData) {
         dateFin,
         code,
         isActif: true,
+        objectif,
       },
     });
   }
 
-  revalidatePath(`/dashboard/${espaceId}`, "layout");
+  revalidatePath(`/dashboard/${espaceId}`);
 }
 
 export async function ajouterSocieteAction(prevState: any, formData: FormData) {
