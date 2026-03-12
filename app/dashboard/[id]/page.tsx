@@ -7,82 +7,105 @@ import {
 } from 'lucide-react';
 import ExerciceAlerte from "./_components/ExerciceAlerte";
 
-// On force le rafraîchissement pour éviter les problèmes de cache à la création
+// On force le rafraîchissement pour garantir la fraîcheur des données
 export const dynamic = "force-dynamic";
-export const revalidate = 0; // Force la désactivation du cache pour ce segment 
+export const revalidate = 0;
 
 interface Props {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ nouveau?: string }>;
+  searchParams: Promise<{ nouveau?: string; exercice?: string }>;
 }
 
 export default async function DashboardReel({ params, searchParams }: Props) {
   const { id } = await params;
-  const { nouveau } = await searchParams;
+  const sParams = await searchParams;
+  const { nouveau, exercice: exerciceParam } = sParams;
 
-  // 1. CHARGEMENT DES DONNÉES RÉELLES EN PARALLÈLE
-  const [espace, statsCA, nbClients, nbDevis, exerciceActif] = await Promise.all([
+  // 1. IDENTIFICATION DE L'EXERCICE CIBLE
+  // On cherche d'abord spécifiquement celui de l'URL s'il existe
+  let exerciceCible = null;
+
+  if (exerciceParam) {
+    exerciceCible = await prisma.exercice.findFirst({
+      where: {
+        espaceId: id,
+        code: exerciceParam,
+      },
+    });
+  }
+
+  // Si aucun exercice n'est spécifié en URL ou si le code URL n'existe pas, on prend l'ACTIF
+  if (!exerciceCible) {
+    exerciceCible = await prisma.exercice.findFirst({
+      where: {
+        espaceId: id,
+        isActif: true,
+      },
+    });
+  }
+
+  // 2. CHARGEMENT DES DONNÉES FILTRÉES (Utilisation de l'ID de l'exercice trouvé)
+  const [espace, statsCA, nbClients, nbDevis] = await Promise.all([
     prisma.espace.findUnique({ where: { id } }),
 
-    // Calcul du CA Réel
+    // CA Réel filtré strictement par l'ID de l'exercice sélectionné
     prisma.facture.aggregate({
       where: {
         espaceId: id,
-        exercice: { isActif: true },
+        exerciceId: exerciceCible?.id, // On utilise l'ID unique
         type: "FACTURE",
         statut: "PAYE",
       },
       _sum: { montantHT: true },
     }),
 
-    // Nombre de clients
+    // Clients liés à l'espace
     prisma.client.count({ where: { espaceId: id } }),
 
-    // Nombre de devis en attente
+    // Devis filtrés strictement par l'ID de l'exercice sélectionné
     prisma.facture.count({
       where: {
         espaceId: id,
+        exerciceId: exerciceCible?.id, // On utilise l'ID unique
         type: "DEVIS",
         statut: "BROUILLON",
       },
     }),
-
-    // Recherche d'un exercice actif
-    prisma.exercice.findFirst({
-      where: { espaceId: id, isActif: true }
-    })
   ]);
 
   if (!espace) notFound();
 
-  // LOGIQUE D'AFFICHAGE DE L'ALERTE :
-  // On l'affiche si l'exercice n'existe pas OU si le flag "nouveau" est présent dans l'URL
-  const doitAfficherAlerte = !exerciceActif || nouveau === "true";
+  // LOGIQUE D'AFFICHAGE DE L'ALERTE
+  const doitAfficherAlerte = !exerciceCible || nouveau === "true";
 
   const totalCA = statsCA._sum.montantHT || 0;
-  const objectif = exerciceActif?.objectif || 5000;
+  const objectif = exerciceCible?.objectif || 5000;
   const pourcentageAtteint = Math.min(Math.round((totalCA / objectif) * 100), 100);
 
   return (
     <div className="p-6 md:p-10 bg-[#F8FAFF] min-h-screen space-y-10 font-sans text-slate-900">
 
-      {/* CORRECTION ICI : Passage de la propriété 'exercice' requise par le composant */}
       {doitAfficherAlerte && (
         <ExerciceAlerte
           espaceId={id}
-          exercice={exerciceActif}
+          exercice={exerciceCible}
         />
       )}
 
-      {/* HEADER AVEC BOUTONS D'ACTION */}
+      {/* HEADER AVEC TITRE DYNAMIQUE */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-black bg-gradient-to-r from-slate-900 via-blue-800 to-indigo-900 bg-clip-text text-transparent italic uppercase tracking-tighter">
-            {espace.nom}
+            {espace.nom} 
+            {exerciceCible && (
+              <span className="ml-3 text-blue-600">
+                [{exerciceCible.code}]
+              </span>
+            )}
           </h1>
           <p className="text-slate-500 font-bold flex items-center gap-2">
             <span className="w-2 h-2 bg-green-500 rounded-full animate-ping" />
-            Analyse de l'exercice en temps réel
+            Analyse de l'exercice {exerciceCible?.code || "indéfini"}
           </p>
         </div>
 
@@ -104,9 +127,9 @@ export default async function DashboardReel({ params, searchParams }: Props) {
       {/* STATS CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <StatCard
-          label="Chiffre d'Affaires"
+          label={`CA ENCAISSÉ ${exerciceCible?.code || ""}`}
           value={`${totalCA.toLocaleString('fr-FR')} €`}
-          trend="Encaissé"
+          trend="Encaissé réel"
           color="from-blue-600 to-indigo-700"
           icon={<TrendingUp />}
         />
@@ -120,7 +143,7 @@ export default async function DashboardReel({ params, searchParams }: Props) {
         <StatCard
           label="Devis en attente"
           value={nbDevis.toString()}
-          trend="À convertir"
+          trend={`Année ${exerciceCible?.code || ""}`}
           color="from-orange-500 to-red-600"
           icon={<FileText />}
         />
@@ -132,7 +155,7 @@ export default async function DashboardReel({ params, searchParams }: Props) {
           <div className="absolute top-0 right-0 p-8 opacity-10">
             <Activity size={120} className="text-indigo-600" />
           </div>
-          <h3 className="text-xl font-black text-slate-800 mb-8">Flux d'activité mensuel</h3>
+          <h3 className="text-xl font-black text-slate-800 mb-8">Flux d'activité {exerciceCible?.code}</h3>
           <div className="flex items-end justify-between h-64 gap-3">
             {[60, 40, 95, 70, 55, 85, 100, 75, 50, 90, 65, 80].map((h, i) => (
               <div key={i} className="flex-1 flex flex-col items-center gap-3 group">
@@ -150,7 +173,7 @@ export default async function DashboardReel({ params, searchParams }: Props) {
 
         {/* CERCLE DE PROGRESSION */}
         <div className="bg-slate-900 p-8 rounded-[2.5rem] shadow-2xl text-white flex flex-col items-center justify-between text-center border border-slate-800">
-          <h3 className="text-lg font-bold mb-4 text-slate-400 uppercase tracking-widest text-[10px]">Objectif Annuel</h3>
+          <h3 className="text-lg font-bold mb-4 text-slate-400 uppercase tracking-widest text-[10px]">Objectif {exerciceCible?.code}</h3>
           <div className="relative w-56 h-56">
             <svg className="w-full h-full transform -rotate-90">
               <circle cx="112" cy="112" r="90" stroke="#1e293b" strokeWidth="18" fill="transparent" />
@@ -179,7 +202,6 @@ export default async function DashboardReel({ params, searchParams }: Props) {
           </div>
         </div>
       </div>
-
     </div>
   );
 }
