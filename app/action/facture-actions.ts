@@ -63,28 +63,53 @@ export async function createDevis(formData: FormData, lignes: any[], espaceId: s
   const clientId = formData.get("clientId") as string;
   const exerciceId = formData.get("exerciceId") as string;
 
-  const montantHT = lignes.reduce((acc, ligne) => {
-    return acc + (parseFloat(ligne.quantite) * parseFloat(ligne.prixUnitaire));
-  }, 0);
+  // 1. CALCULS DES TOTAUX (SÉCURITÉ SERVEUR)
+  let totalNetHT = 0;
+  let totalTVA = 0;
+
+  const lignesPreparees = lignes.map(l => {
+    const qte = parseFloat(l.quantite) || 0;
+    const pu = parseFloat(l.prixUnitaire) || 0;
+    const remisePct = parseFloat(l.remise) || 0;
+    const tvaPct = parseFloat(l.tva) || 0;
+
+    // Calcul du montant HT après remise pour la ligne
+    const sousTotalBrut = qte * pu;
+    const montantRemise = sousTotalBrut * (remisePct / 100);
+    const sousTotalNetHT = sousTotalBrut - montantRemise;
+    
+    // Calcul de la TVA pour la ligne
+    const montantTVA = sousTotalNetHT * (tvaPct / 100);
+
+    totalNetHT += sousTotalNetHT;
+    totalTVA += montantTVA;
+
+    return {
+      designation: l.designation,
+      quantite: qte,
+      prixUnitaire: pu,
+      remise: remisePct, // Inclus car ajouté au schéma
+      tva: tvaPct,       // Inclus car ajouté au schéma
+    };
+  });
 
   try {
     const numeroAuto = `DEV-${Math.floor(10000 + Math.random() * 90000)}`;
 
+    // 2. INSERTION EN BASE DE DONNÉES
     await prisma.facture.create({
       data: {
         numero: numeroAuto,
         type: "DEVIS",
         statut: "BROUILLON" as StatutFacture,
-        montantHT: montantHT,
+        montantHT: totalNetHT,    // Total net de remises
+        montantTVA: totalTVA,    // Valeur désormais requise
+        totalTTC: totalNetHT + totalTVA, // Valeur désormais requise
         clientId: clientId,
         espaceId: espaceId,
         exerciceId: exerciceId,
         lignes: {
-          create: lignes.map(l => ({
-            designation: l.designation,
-            quantite: parseFloat(l.quantite),
-            prixUnitaire: parseFloat(l.prixUnitaire),
-          }))
+          create: lignesPreparees
         }
       }
     });
@@ -178,31 +203,48 @@ export async function updateDocument(
   espaceId: string
 ) {
   const clientId = formData.get("clientId") as string;
-  const montantHT = lignes.reduce((acc, l) => acc + (parseFloat(l.quantite) * parseFloat(l.prixUnitaire)), 0);
+  
+  // --- RE-CALCULS DE SÉCURITÉ ---
+  let totalNetHT = 0;
+  let totalTVA = 0;
+
+  const lignesPreparees = lignes.map(l => {
+    const qte = parseFloat(l.quantite) || 0;
+    const pu = parseFloat(l.prixUnitaire) || 0;
+    const remisePct = parseFloat(l.remise) || 0;
+    const tvaPct = parseFloat(l.tva) || 0;
+
+    const netHT = (qte * pu) * (1 - remisePct / 100);
+    const montantTVA = netHT * (tvaPct / 100);
+
+    totalNetHT += netHT;
+    totalTVA += montantTVA;
+
+    return {
+      designation: l.designation,
+      quantite: qte,
+      prixUnitaire: pu,
+      remise: remisePct,
+      tva: tvaPct,
+    };
+  });
 
   try {
-    // 1. Sécurité : Vérifier le statut
     const docActuel = await prisma.facture.findUnique({ where: { id: docId } });
     if (!docActuel) throw new Error("Document introuvable");
-    if (docActuel.statut === "PAYE" || docActuel.statut === "ANNULE") {
-      return { error: "Modification impossible : document déjà payé ou annulé." };
-    }
+    if (docActuel.statut === "PAYE") return { error: "Modification impossible pour un document payé." };
 
-    // 2. Mise à jour atomique
     await prisma.facture.update({
       where: { id: docId },
       data: {
         clientId: clientId,
-        montantHT: montantHT,
+        montantHT: totalNetHT,
+        montantTVA: totalTVA,
+        totalTTC: totalNetHT + totalTVA,
         updatedAt: new Date(),
-        // On supprime toutes les lignes liées et on les recrée d'un coup
         lignes: {
-          deleteMany: {}, // Vide toutes les lignes existantes pour cet ID de facture
-          create: lignes.map(l => ({
-            designation: l.designation,
-            quantite: parseFloat(l.quantite),
-            prixUnitaire: parseFloat(l.prixUnitaire),
-          }))
+          deleteMany: {}, // On nettoie les anciennes lignes
+          create: lignesPreparees // On insère les nouvelles avec TVA/Remise
         }
       }
     });

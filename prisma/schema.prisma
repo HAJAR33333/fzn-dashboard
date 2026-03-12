@@ -83,7 +83,8 @@ model Facture {
   
   // Montants globaux
   montantHT     Float          @default(0)
-  tva           Float          @default(20)
+  montantTVA   Float           @default(0)
+  totalTTC     Float           @default(0)
 
   // Liaisons obligatoires selon votre logique
   espaceId      String
@@ -109,6 +110,8 @@ model LigneFacture {
   prixUnitaire Float
   
   factureId    String
+  remise       Float    @default(0) 
+  tva          Float    @default(20) 
   facture      Facture @relation(fields: [factureId], references: [id], onDelete: Cascade)
 }
 
