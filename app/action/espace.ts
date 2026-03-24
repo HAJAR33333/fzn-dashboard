@@ -1,59 +1,52 @@
 "use server";
 
-import bcrypt from "bcryptjs"; import prisma from '../../lib/prisma'
-import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
+import bcrypt from "bcryptjs";
+import prisma from '../../lib/prisma';
+import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { addMonths, subDays, getYear } from "date-fns";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 
-export async function creerEspace(prevState: any, formData: FormData) {
-  // Récupération des données du formulaire
-  const email = formData.get('email') as string
-  const password = formData.get('password') as string
-  const nomEspace = formData.get('nomEspace') as string
-  const siret = formData.get('siret') as string
-  const anneeActuelle = new Date().getFullYear().toString()
+export type ActionState = {
+  success?: boolean;
+  email?: string | null;
+  espaceId?: string | null;
+  error?: string | null;
+};
 
-  // Variable pour stocker l'ID de l'espace créé afin de rediriger après
+/**
+ * Action pour la création initiale (Inscription + Premier Espace)
+ */
+export async function creerEspace(prevState: any, formData: FormData): Promise<ActionState> {
+  const email = formData.get('email') as string;
+  const password = formData.get('password') as string;
+  const nomEspace = formData.get('nomEspace') as string;
+  const siret = formData.get('siret') as string;
+  const anneeActuelle = new Date().getFullYear().toString();
+
   let createdEspaceId: string | null = null;
 
   try {
-    // 1. Vérifications de sécurité
-    const siretExistant = await prisma.espace.findUnique({ where: { siret } })
-    if (siretExistant) {
-      return { error: "Ce numéro SIRET est déjà rattaché à une société." }
-    }
+    const siretExistant = await prisma.espace.findUnique({ where: { siret } });
+    if (siretExistant) return { error: "Ce numéro SIRET est déjà rattaché à une société." };
 
-    // 2. Transaction Atomique
     await prisma.$transaction(async (tx) => {
-
-      // On cherche si l'utilisateur existe déjà, sinon on le crée
-      let user = await tx.user.findUnique({ where: { email } })
+      let user = await tx.user.findUnique({ where: { email } });
 
       if (!user) {
         const hashedPassword = await bcrypt.hash(password, 10);
         user = await tx.user.create({
-          data: {
-            email,
-            password: hashedPassword
-          }
-        })
+          data: { email, password: hashedPassword }
+        });
       }
 
-      // Création de la société (Espace) liée à cet utilisateur
       const nouvelEspace = await tx.espace.create({
-        data: {
-          nom: nomEspace,
-          siret: siret,
-          userId: user.id
-        }
-      })
+        data: { nom: nomEspace, siret, userId: user.id }
+      });
 
-      // On stocke l'ID pour la redirection
       createdEspaceId = nouvelEspace.id;
 
-      // Création automatique du premier exercice comptable
       await tx.exercice.create({
         data: {
           code: anneeActuelle,
@@ -62,94 +55,89 @@ export async function creerEspace(prevState: any, formData: FormData) {
           isActif: true,
           espaceId: nouvelEspace.id
         }
-      })
-    })
+      });
+    });
 
-    revalidatePath('/')
+    revalidatePath('/');
+    return { success: true, email, espaceId: createdEspaceId, error: null };
 
   } catch (err) {
-    console.error("Erreur lors de la création :", err)
-    return { error: "Une erreur est survenue lors de la configuration de votre espace." }
-  }
-
-  // 3. Redirection directe vers le Dashboard de la société créée
-  if (createdEspaceId) {
-    redirect(`/dashboard/${createdEspaceId}?nouveau=true`);
+    console.error("Erreur creation :", err);
+    return { error: "Erreur lors de la configuration de l'espace." };
   }
 }
 
+/**
+ * ✅ ACTION MANQUANTE : Modifier ou créer un exercice fiscal
+ * Assurez-vous que le mot-clé 'export' est bien présent ici.
+ */
 export async function modifierOuCreerExerciceAction(formData: FormData) {
   const id = formData.get("id")?.toString();
   const espaceId = formData.get("espaceId")?.toString();
   const dateDebutStr = formData.get("dateDebut") as string;
   const objectifStr = formData.get("objectif") as string;
 
+  if (!dateDebutStr || !espaceId) return;
+
   const dateDebut = new Date(dateDebutStr);
   const dateFin = subDays(addMonths(dateDebut, 12), 1);
   const code = getYear(dateFin).toString();
   const objectif = parseFloat(objectifStr) || 0;
 
-  if (id && id !== "undefined" && id !== "") {
-    // 1. MISE À JOUR
-    await prisma.exercice.update({
-      where: { id },
-      data: { dateDebut, dateFin, code, objectif },
-    });
-  } else if (espaceId) {
-    // 2. CRÉATION (Sécurité : désactiver les autres exercices avant)
-    await prisma.exercice.updateMany({
-      where: { espaceId },
-      data: { isActif: false }
-    });
+  try {
+    if (id && id !== "undefined" && id !== "") {
+      await prisma.exercice.update({
+        where: { id },
+        data: { dateDebut, dateFin, code, objectif },
+      });
+    } else {
+      // Désactiver les autres exercices
+      await prisma.exercice.updateMany({
+        where: { espaceId },
+        data: { isActif: false }
+      });
 
-    await prisma.exercice.create({
-      data: {
-        espaceId,
-        dateDebut,
-        dateFin,
-        code,
-        isActif: true,
-        objectif,
-      },
-    });
+      await prisma.exercice.create({
+        data: {
+          espaceId,
+          dateDebut,
+          dateFin,
+          code,
+          isActif: true,
+          objectif,
+        },
+      });
+    }
+    revalidatePath(`/dashboard/${espaceId}`);
+  } catch (error) {
+    console.error("Erreur exercice :", error);
   }
-
-  revalidatePath(`/dashboard/${espaceId}`);
 }
 
+/**
+ * Action pour ajouter une société supplémentaire (depuis le dashboard)
+ */
 export async function ajouterSocieteAction(prevState: any, formData: FormData) {
   const nomEspace = formData.get('nomEspace') as string;
   const siret = formData.get('siret') as string;
   const anneeActuelle = new Date().getFullYear().toString();
 
-  // 1. Récupération de l'utilisateur connecté
   const session = await getServerSession(authOptions);
-
-  if (!session?.user?.id) {
-    return { error: "Session expirée ou non autorisée." };
-  }
+  if (!session?.user?.id) return { error: "Session expirée." };
 
   const userId = session.user.id;
   let createdEspaceId: string | null = null;
 
   try {
     const siretExistant = await prisma.espace.findUnique({ where: { siret } });
-    if (siretExistant) {
-      return { error: "Ce numéro SIRET est déjà rattaché à une société." };
-    }
+    if (siretExistant) return { error: "SIRET déjà rattaché." };
 
     await prisma.$transaction(async (tx) => {
-      // Création de la nouvelle société
       const nouvelEspace = await tx.espace.create({
-        data: {
-          nom: nomEspace,
-          siret,
-          userId,
-        }
+        data: { nom: nomEspace, siret, userId }
       });
       createdEspaceId = nouvelEspace.id;
 
-      // Création de l'exercice fiscal initial
       await tx.exercice.create({
         data: {
           code: anneeActuelle,
@@ -161,16 +149,12 @@ export async function ajouterSocieteAction(prevState: any, formData: FormData) {
       });
     });
 
-    // ✅ On revalide tout le layout du dashboard pour que le SpaceSwitcher 
-    // affiche la nouvelle société immédiatement sans rafraîchir la page
     revalidatePath('/dashboard', 'layout');
-
-  } catch (err) {
-    console.error("Erreur création société :", err);
-    return { error: "Une erreur est survenue lors de la création de la société." };
+  } catch (err: any) {
+    if (err?.digest?.startsWith("NEXT_REDIRECT")) throw err;
+    return { error: "Erreur lors de l'ajout de la société." };
   }
 
-  // ✅ Redirection vers le dashboard de la société fraîchement créée
   if (createdEspaceId) {
     redirect(`/dashboard/${createdEspaceId}?nouveau=true`);
   }

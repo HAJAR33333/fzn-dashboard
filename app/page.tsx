@@ -2,24 +2,67 @@
 
 import { useActionState, useState, useTransition, useEffect, useMemo } from 'react';
 import {
-  LayoutDashboard, ArrowRight, AlertCircle, Loader2, Rocket,
-  UserCircle2, Mail, Lock, Building2, ShieldCheck, CheckCircle2, XCircle,
+  LayoutDashboard, ArrowRight, AlertCircle, Loader2,
+  Mail, Lock, Building2, ShieldCheck, CheckCircle2, XCircle,
   Eye, EyeOff
 } from 'lucide-react';
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { creerEspace } from './action/espace';
 
+// --- TYPAGE DE L'ETAT ---
+interface ActionState {
+  success?: boolean;
+  email?: string | null;
+  espaceId?: string | null;
+  error?: string | null;
+}
+
+const initialState: ActionState = {
+  success: false,
+  email: null,
+  espaceId: null,
+  error: null
+};
+
 export default function PortailAcces() {
   const [showLogin, setShowLogin] = useState(false);
-  const [showPassword, setShowPassword] = useState(false); // État pour l'oeil
+  const [showPassword, setShowPassword] = useState(false); 
   const [isLoggingIn, startLoginTransition] = useTransition();
   const [loginError, setLoginError] = useState<string | null>(null);
   const router = useRouter();
-  const [state, formAction, isPending] = useActionState(creerEspace, null);
+
+  // Utilisation du typage générique pour éviter l'erreur 'never'
+  const [state, formAction, isPending] = useActionState<ActionState, FormData>(
+    creerEspace, 
+    initialState
+  );
 
   const [password, setPassword] = useState("");
   const [siret, setSiret] = useState("");
+
+  // ✅ LOGIQUE DE CONNEXION AUTO APRÈS INSCRIPTION
+  useEffect(() => {
+    if (state?.success && state?.email && state?.espaceId) {
+      const autoLogin = async () => {
+        setLoginError(null);
+        const result = await signIn("credentials", { 
+          email: state.email, 
+          password: password, 
+          redirect: false 
+        });
+
+        if (result?.error) {
+          setLoginError("Espace créé. Veuillez vous connecter manuellement.");
+          setShowLogin(true);
+        } else {
+          router.push(`/dashboard/${state.espaceId}?nouveau=true`);
+          router.refresh();
+        }
+      };
+      autoLogin();
+    }
+  }, [state, router, password]);
 
   // Sécurité Anti-Retour
   useEffect(() => {
@@ -120,7 +163,7 @@ export default function PortailAcces() {
                   </div>
                 </div>
 
-                {/* PASSWORD AVEC OPTION VOIR/CACHER */}
+                {/* PASSWORD */}
                 <div className="group">
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 px-1">Mot de passe</label>
                   <div className="relative">
@@ -143,7 +186,6 @@ export default function PortailAcces() {
                     </button>
                   </div>
 
-                  {/* Indicateurs de force (Inscription seulement) */}
                   {!showLogin && password.length > 0 && (
                     <div className="mt-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-2 animate-in fade-in slide-in-from-top-2">
                       <div className="flex items-center justify-between">
