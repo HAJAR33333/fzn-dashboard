@@ -20,18 +20,33 @@ model User {
 
 // 2. Gestion Multi-Sociétés (Espaces)
 model Espace {
-  id        String     @id @default(cuid())
-  nom       String
-  siret     String     @unique
-  couleur   String?    @default("#3b82f6")
-  createdAt DateTime   @default(now())
+  id              String    @id @default(cuid())
+  nom             String    // Dénomination sociale
+  siret           String    @unique
+  formeJuridique  String?   // SARL, SAS, etc.
   
-  exercices Exercice[]
-  clients   Client[]
-  factures  Facture[]  // Relation ajoutée pour centraliser les documents de l'espace
+  // Dirigeant
+  dirigeantPrenom String?
+  dirigeantNom    String?
+  
+  // Adresse Siège
+  adresse         String?
+  codePostal      String?
+  ville           String?
+  pays            String?   @default("France")
+  
+  // Contact
+  email           String?
+  telephone       String?
 
-  userId    String?
-  user      User?      @relation(fields: [userId], references: [id])
+  couleur         String?   @default("#3b82f6")
+  createdAt       DateTime  @default(now())
+  
+  exercices       Exercice[]
+  clients         Client[]
+  factures        Facture[]
+  userId          String?
+  user            User?     @relation(fields: [userId], references: [id])
 }
 
 // 3. Exercice Comptable

@@ -159,3 +159,21 @@ export async function ajouterSocieteAction(prevState: any, formData: FormData) {
     redirect(`/dashboard/${createdEspaceId}?nouveau=true`);
   }
 }
+
+export async function updateEspaceAction(id: string, formData: FormData) {
+  await prisma.espace.update({
+    where: { id },
+    data: {
+      nom: formData.get("nom") as string,
+      formeJuridique: formData.get("formeJuridique") as string,
+      dirigeantPrenom: formData.get("dirigeantPrenom") as string,
+      dirigeantNom: formData.get("dirigeantNom") as string,
+      adresse: formData.get("adresse") as string,
+      codePostal: formData.get("codePostal") as string,
+      ville: formData.get("ville") as string,
+      email: formData.get("email") as string,
+      telephone: formData.get("telephone") as string,
+    }
+  });
+  revalidatePath(`/dashboard/${id}`);
+}

@@ -6,8 +6,9 @@ import {
   ArrowUpRight, Activity, FileText
 } from 'lucide-react';
 import ExerciceAlerte from "./_components/ExerciceAlerte";
+// 1. Import du nouveau modal
+import InformationSocieteModal from "./_components/InformationSocieteModal";
 
-// On force le rafraîchissement pour garantir la fraîcheur des données
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -21,10 +22,8 @@ export default async function DashboardReel({ params, searchParams }: Props) {
   const sParams = await searchParams;
   const { nouveau, exercice: exerciceParam } = sParams;
 
-  // 1. IDENTIFICATION DE L'EXERCICE CIBLE
-  // On cherche d'abord spécifiquement celui de l'URL s'il existe
+  // --- LOGIQUE EXERCICE ---
   let exerciceCible = null;
-
   if (exerciceParam) {
     exerciceCible = await prisma.exercice.findFirst({
       where: {
@@ -34,7 +33,6 @@ export default async function DashboardReel({ params, searchParams }: Props) {
     });
   }
 
-  // Si aucun exercice n'est spécifié en URL ou si le code URL n'existe pas, on prend l'ACTIF
   if (!exerciceCible) {
     exerciceCible = await prisma.exercice.findFirst({
       where: {
@@ -44,29 +42,26 @@ export default async function DashboardReel({ params, searchParams }: Props) {
     });
   }
 
-  // 2. CHARGEMENT DES DONNÉES FILTRÉES (Utilisation de l'ID de l'exercice trouvé)
+  // --- CHARGEMENT DES DONNÉES ---
   const [espace, statsCA, nbClients, nbDevis] = await Promise.all([
     prisma.espace.findUnique({ where: { id } }),
 
-    // CA Réel filtré strictement par l'ID de l'exercice sélectionné
     prisma.facture.aggregate({
       where: {
         espaceId: id,
-        exerciceId: exerciceCible?.id, // On utilise l'ID unique
+        exerciceId: exerciceCible?.id,
         type: "FACTURE",
         statut: "PAYE",
       },
       _sum: { montantHT: true },
     }),
 
-    // Clients liés à l'espace
     prisma.client.count({ where: { espaceId: id } }),
 
-    // Devis filtrés strictement par l'ID de l'exercice sélectionné
     prisma.facture.count({
       where: {
         espaceId: id,
-        exerciceId: exerciceCible?.id, // On utilise l'ID unique
+        exerciceId: exerciceCible?.id,
         type: "DEVIS",
         statut: "BROUILLON",
       },
@@ -75,9 +70,11 @@ export default async function DashboardReel({ params, searchParams }: Props) {
 
   if (!espace) notFound();
 
-  // LOGIQUE D'AFFICHAGE DE L'ALERTE
-  const doitAfficherAlerte = !exerciceCible || nouveau === "true";
+  // 2. VÉRIFICATION SI LES INFOS LÉGALES SONT COMPLÈTES
+  // On vérifie les champs critiques que l'utilisateur doit renseigner
+  const infosIncompletes = !espace.formeJuridique || !espace.adresse || !espace.dirigeantNom;
 
+  const doitAfficherAlerte = !exerciceCible || nouveau === "true";
   const totalCA = statsCA._sum.montantHT || 0;
   const objectif = exerciceCible?.objectif || 5000;
   const pourcentageAtteint = Math.min(Math.round((totalCA / objectif) * 100), 100);
@@ -85,6 +82,12 @@ export default async function DashboardReel({ params, searchParams }: Props) {
   return (
     <div className="p-6 md:p-10 bg-[#F8FAFF] min-h-screen space-y-10 font-sans text-slate-900">
 
+      {/* 3. POP-UP OBLIGATOIRE (Priorité haute) */}
+      {infosIncompletes && (
+        <InformationSocieteModal espace={espace} />
+      )}
+
+      {/* ALERTE EXERCICE (S'affiche après ou si le modal est rempli) */}
       {doitAfficherAlerte && (
         <ExerciceAlerte
           espaceId={id}
