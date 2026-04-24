@@ -8,14 +8,22 @@ datasource db {
   provider = "postgresql"
 }
 
-// 1. Modèle Utilisateur
+// 1. Modèle Utilisateur (Propriétaires et Salariés)
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  nom       String?
-  createdAt DateTime @default(now())
-  espaces   Espace[]
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String?
+  nom           String?
+  role          Role      @default(OWNER) 
+  createdAt     DateTime  @default(now())
+
+  // Relations
+  // 1. Les espaces dont il est le créateur/propriétaire principal
+  espacesOwned  Espace[]  @relation("OwnerRelation")
+
+  // 2. L'espace auquel il est rattaché en tant que salarié (utilisateur secondaire)
+  espaceId      String?
+  espaceTravail Espace?   @relation("CollaborateurRelation", fields: [espaceId], references: [id])
 }
 
 // 2. Gestion Multi-Sociétés (Espaces)
@@ -42,11 +50,18 @@ model Espace {
   couleur         String?   @default("#3b82f6")
   createdAt       DateTime  @default(now())
   
+  // --- RELATIONS UTILISATEURS ---
+  // Le propriétaire unique
+  userId          String?
+  owner           User?     @relation("OwnerRelation", fields: [userId], references: [id])
+
+  // La liste des salariés / utilisateurs secondaires
+  collaborateurs  User[]    @relation("CollaborateurRelation")
+
+  // --- BUSINESS LOGIC ---
   exercices       Exercice[]
   clients         Client[]
   factures        Facture[]
-  userId          String?
-  user            User?     @relation(fields: [userId], references: [id])
 }
 
 // 3. Exercice Comptable
@@ -56,14 +71,14 @@ model Exercice {
   dateDebut DateTime
   dateFin   DateTime
   isActif   Boolean   @default(false)
+  objectif  Float     @default(0)
   
   espaceId  String
   espace    Espace    @relation(fields: [espaceId], references: [id])
   
-  factures  Facture[] // Relation pour l'agrégation des données financières
+  factures  Facture[] 
 
   @@unique([code, espaceId]) 
-  objectif  Float    @default(0)
 }
 
 // 4. Modèle Client
@@ -80,28 +95,26 @@ model Client {
   siret          String?
   email          String?
   telephone      String?
-  statutClient   String?  // ex: Prospect, Client actif, etc.
+  statutClient   String?  // ex: Prospect, Client actif
   
   espaceId       String
   espace         Espace   @relation(fields: [espaceId], references: [id])
   factures       Facture[]
 }
 
-// 5. NOUVEAU : Modèle Devis & Factures (Gestion Commerciale)
+// 5. Modèle Devis & Factures
 model Facture {
   id            String         @id @default(cuid())
   numero        String         // ex: DEV-2025-001
-  type          DocumentType   @default(DEVIS) // Bascule de DEVIS à FACTURE ici
+  type          DocumentType   @default(DEVIS)
   statut        StatutFacture  @default(BROUILLON)
   dateEmission  DateTime       @default(now())
   dateEcheance  DateTime?
   
-  // Montants globaux
   montantHT     Float          @default(0)
-  montantTVA   Float           @default(0)
-  totalTTC     Float           @default(0)
+  montantTVA    Float          @default(0)
+  totalTTC      Float          @default(0)
 
-  // Liaisons obligatoires selon votre logique
   espaceId      String
   espace        Espace         @relation(fields: [espaceId], references: [id])
   
@@ -111,34 +124,41 @@ model Facture {
   exerciceId    String
   exercice      Exercice       @relation(fields: [exerciceId], references: [id])
 
-  lignes        LigneFacture[] // Détail des prestations
+  lignes        LigneFacture[] 
   
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
 
-// 6. NOUVEAU : Détail des lignes du document
+// 6. Détail des lignes
 model LigneFacture {
   id           String  @id @default(cuid())
   designation  String
   quantite     Float   @default(1)
   prixUnitaire Float
+  remise       Float   @default(0) 
+  tva          Float   @default(20) 
   
   factureId    String
-  remise       Float    @default(0) 
-  tva          Float    @default(20) 
   facture      Facture @relation(fields: [factureId], references: [id], onDelete: Cascade)
 }
 
-// Enums pour sécuriser les types et statuts
+// --- ENUMS ---
+
 enum DocumentType {
   DEVIS
   FACTURE
 }
 
 enum StatutFacture {
-  BROUILLON // Uniquement pour Devis
-  VALIDE    // Transformé en Facture, à payer
-  PAYE      // Encaissé -> Alimente le Dashboard
+  BROUILLON
+  VALIDE    
+  PAYE      
   ANNULE
+}
+
+enum Role {
+  OWNER         // Le créateur
+  MANAGER       // Manager
+  COLLABORATEUR // Au lieu de USER
 }

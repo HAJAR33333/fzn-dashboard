@@ -2,12 +2,17 @@ import { prisma } from "@/lib/prisma";
 import SpaceSwitcher from "./_components/SpaceSwitcher";
 import ExerciceSwitcher from "./_components/ExerciceSwitcher";
 import { notFound } from "next/navigation";
-import { LayoutDashboard, LogOut, ChevronRight } from 'lucide-react';
+import { 
+  LayoutDashboard, 
+  ChevronRight, 
+  Users2, 
+  Settings 
+} from 'lucide-react';
 import Link from 'next/link';
 import SidebarLinks from "./clients/_components/SidebarLinks";
 import LogoutButton from "./_components/LogoutButton";
 
-// Force le rendu dynamique pour garantir que les données Prisma sont fraîches à chaque refresh
+// Force le rendu dynamique pour garantir que les données Prisma sont fraîches
 export const dynamic = "force-dynamic";
 
 export default async function DashboardLayout({
@@ -27,25 +32,18 @@ export default async function DashboardLayout({
 
   if (!espaceEnCours || !espaceEnCours.userId) notFound();
 
-  // 2. RÉCUPÉRATION DES EXERCICES (LOGIQUE NETTOYÉE)
-  // On récupère uniquement les exercices existants dans la table Exercice.
-  // Cela supprime automatiquement les anciens codes (comme 2026) s'ils ont été modifiés.
+  // 2. RÉCUPÉRATION DES EXERCICES
   const tousLesExercices = await prisma.exercice.findMany({
     where: { espaceId: id },
     select: { code: true, isActif: true },
     orderBy: { code: 'desc' }
   });
 
-  // Liste des codes uniques pour le menu déroulant
   const listeExercicesFinal = Array.from(new Set(tousLesExercices.map(ex => ex.code)));
-
-  // Identification de l'exercice marqué comme actif "isActif: true"
   const exerciceActifObj = tousLesExercices.find(ex => ex.isActif);
-
-  // Valeur de secours si aucun exercice n'est trouvé
   const anneeCivileActuelle = new Date().getFullYear().toString();
 
-  // 3. Récupérer la liste des espaces de l'utilisateur
+  // 3. Récupérer la liste des espaces de l'utilisateur (Propriétaire)
   const espacesDuProprietaire = await prisma.espace.findMany({
     where: { userId: espaceEnCours.userId },
     orderBy: { nom: 'asc' },
@@ -54,6 +52,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex min-h-screen bg-[#F4F7FE] overflow-x-hidden font-sans text-slate-700">
+      
       {/* Sidebar fixe à gauche */}
       <aside className="w-80 bg-white border-r border-slate-200/60 hidden md:flex flex-col p-7 fixed h-full z-50 overflow-y-auto">
 
@@ -63,7 +62,7 @@ export default async function DashboardLayout({
             <LayoutDashboard className="text-white w-6 h-6" />
           </div>
           <div className="flex flex-col">
-            <span className="font-black text-2xl tracking-tighter text-slate-900 leading-none">FZN DASH</span>
+            <span className="font-black text-2xl tracking-tighter text-slate-900 leading-none uppercase italic">FZN DASH</span>
             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-600 mt-1">Compta Pro</span>
           </div>
         </div>
@@ -76,20 +75,43 @@ export default async function DashboardLayout({
           </div>
         </div>
 
-        {/* Exercice Switcher Section 
-            PROPS : 
-            - exercices: La liste propre sans les anciennes valeurs.
-            - exerciceActif: Le code réel en DB pour forcer la mise à jour du label.
-        */}
+        {/* Exercice Switcher */}
         <ExerciceSwitcher
           exercices={listeExercicesFinal}
           exerciceActif={exerciceActifObj?.code || anneeCivileActuelle}
         />
 
         {/* Navigation Links Section */}
-        <nav className="flex-1 space-y-2 overflow-y-auto pr-2 mt-2">
+        <nav className="flex-1 space-y-2 pr-2 mt-2">
           <p className="text-[10px] font-black uppercase text-slate-400 mb-3 ml-2 tracking-widest">Menu Principal</p>
           <SidebarLinks id={id} />
+
+          {/* NOUVELLE SECTION : ADMINISTRATION */}
+          <div className="mt-8 pt-6 border-t border-slate-50 space-y-1">
+            <p className="text-[10px] font-black uppercase text-slate-400 mb-4 ml-2 tracking-widest">Administration</p>
+            
+            <Link 
+              href={`/dashboard/${id}/users`}
+              className="flex items-center justify-between group px-4 py-3.5 rounded-2xl hover:bg-slate-950 hover:text-white transition-all duration-300"
+            >
+              <div className="flex items-center gap-3">
+                <Users2 className="w-5 h-5 text-slate-400 group-hover:text-indigo-400 transition-colors" />
+                <span className="font-bold text-[13px] tracking-tight uppercase italic">Utilisateurs</span>
+              </div>
+              <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+            </Link>
+
+            <Link 
+              href={`/dashboard/${id}/settings`}
+              className="flex items-center justify-between group px-4 py-3.5 rounded-2xl hover:bg-slate-950 hover:text-white transition-all duration-300"
+            >
+              <div className="flex items-center gap-3">
+                <Settings className="w-5 h-5 text-slate-400 group-hover:text-indigo-400 transition-colors" />
+                <span className="font-bold text-[13px] tracking-tight uppercase italic">Paramètres</span>
+              </div>
+              <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+            </Link>
+          </div>
         </nav>
 
         {/* Footer Sidebar (Logout) */}

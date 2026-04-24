@@ -1,15 +1,17 @@
 import { NextAuthOptions, DefaultSession } from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
+import { prisma } from "@/lib/prisma"; // Assure-toi que l'import est correct
+import bcrypt from "bcryptjs";
 
 declare module "next-auth" {
     interface Session {
         user: {
             id: string;
+            role: string;
+            espaceId: string;
         } & DefaultSession["user"];
     }
 }
-import CredentialsProvider from "next-auth/providers/credentials";
-import prisma from "@/lib/prisma";
-import bcrypt from "bcryptjs";
 
 export const authOptions: NextAuthOptions = {
     providers: [
@@ -25,11 +27,12 @@ export const authOptions: NextAuthOptions = {
                 }
 
                 const user = await prisma.user.findUnique({
-                    where: { email: credentials.email }
+                    where: { email: credentials.email.toLowerCase() }
                 });
 
-                if (!user) {
-                    throw new Error("Aucun utilisateur trouvé avec cet email");
+                // Si pas d'utilisateur ou si le mot de passe n'a pas encore été configuré (invitation en attente)
+                if (!user || !user.password) {
+                    throw new Error("Compte non activé ou inexistant");
                 }
 
                 const isValidPassword = await bcrypt.compare(credentials.password, user.password);
@@ -42,6 +45,8 @@ export const authOptions: NextAuthOptions = {
                     id: user.id,
                     email: user.email,
                     name: user.nom,
+                    role: user.role,       // AJOUTÉ
+                    espaceId: user.espaceId // AJOUTÉ
                 };
             }
         })
@@ -50,20 +55,24 @@ export const authOptions: NextAuthOptions = {
         strategy: "jwt",
     },
     callbacks: {
-        async session({ session, token }) {
-            if (token && session.user) {
-                session.user.id = token.sub as string;
-            }
-            return session;
-        },
         async jwt({ token, user }) {
             if (user) {
-                token.sub = user.id;
+                token.id = user.id;
+                token.role = (user as any).role;
+                token.espaceId = (user as any).espaceId;
             }
             return token;
+        },
+        async session({ session, token }) {
+            if (token && session.user) {
+                session.user.id = token.id as string;
+                session.user.role = token.role as string;
+                session.user.espaceId = token.espaceId as string;
+            }
+            return session;
         }
     },
     pages: {
-        signIn: "/login",
+        signIn: "/", // Ton path vers app/page.tsx (PortailAcces)
     },
 };
