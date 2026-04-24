@@ -3,10 +3,10 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import {
   TrendingUp, Users, Zap,
-  ArrowUpRight, Activity, FileText
+  ArrowUpRight, Activity, FileText,
+  UserPlus, ShieldCheck
 } from 'lucide-react';
 import ExerciceAlerte from "./_components/ExerciceAlerte";
-// 1. Import du nouveau modal
 import InformationSocieteModal from "./_components/InformationSocieteModal";
 
 export const dynamic = "force-dynamic";
@@ -42,8 +42,8 @@ export default async function DashboardReel({ params, searchParams }: Props) {
     });
   }
 
-  // --- CHARGEMENT DES DONNÉES ---
-  const [espace, statsCA, nbClients, nbDevis] = await Promise.all([
+  // --- CHARGEMENT DES DONNÉES (Ajout des collaborateurs) ---
+  const [espace, statsCA, nbClients, nbDevis, collaborateurs] = await Promise.all([
     prisma.espace.findUnique({ where: { id } }),
 
     prisma.facture.aggregate({
@@ -66,14 +66,17 @@ export default async function DashboardReel({ params, searchParams }: Props) {
         statut: "BROUILLON",
       },
     }),
+
+    prisma.user.findMany({
+      where: { espaceId: id },
+      take: 3, // Aperçu rapide des 3 derniers
+      orderBy: { createdAt: 'desc' }
+    })
   ]);
 
   if (!espace) notFound();
 
-  // 2. VÉRIFICATION SI LES INFOS LÉGALES SONT COMPLÈTES
-  // On vérifie les champs critiques que l'utilisateur doit renseigner
   const infosIncompletes = !espace.formeJuridique || !espace.adresse || !espace.dirigeantNom;
-
   const doitAfficherAlerte = !exerciceCible || nouveau === "true";
   const totalCA = statsCA._sum.montantHT || 0;
   const objectif = exerciceCible?.objectif || 5000;
@@ -82,12 +85,10 @@ export default async function DashboardReel({ params, searchParams }: Props) {
   return (
     <div className="p-6 md:p-10 bg-[#F8FAFF] min-h-screen space-y-10 font-sans text-slate-900">
 
-      {/* 3. POP-UP OBLIGATOIRE (Priorité haute) */}
       {infosIncompletes && (
         <InformationSocieteModal espace={espace} />
       )}
 
-      {/* ALERTE EXERCICE (S'affiche après ou si le modal est rempli) */}
       {doitAfficherAlerte && (
         <ExerciceAlerte
           espaceId={id}
@@ -95,7 +96,7 @@ export default async function DashboardReel({ params, searchParams }: Props) {
         />
       )}
 
-      {/* HEADER AVEC TITRE DYNAMIQUE */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-black bg-gradient-to-r from-slate-900 via-blue-800 to-indigo-900 bg-clip-text text-transparent italic uppercase tracking-tighter">
@@ -113,6 +114,13 @@ export default async function DashboardReel({ params, searchParams }: Props) {
         </div>
 
         <div className="flex items-center gap-3">
+          <Link
+            href={`/dashboard/${id}/users`}
+            className="bg-white border border-slate-200 hover:border-indigo-600 text-slate-700 px-6 py-3 rounded-2xl font-bold shadow-sm transition-all flex items-center gap-2 group"
+          >
+            <Users size={18} className="text-slate-400 group-hover:text-indigo-600 transition-colors" />
+            Équipe
+          </Link>
           <Link
             href={`/dashboard/${id}/gestion`}
             className="bg-white border border-slate-200 hover:border-indigo-600 text-slate-700 px-6 py-3 rounded-2xl font-bold shadow-sm transition-all flex items-center gap-2 group"
@@ -152,21 +160,54 @@ export default async function DashboardReel({ params, searchParams }: Props) {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* GRAPHIQUE */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        
+        {/* NOUVEAU : APERÇU ÉQUIPE (Prend 1 colonne) */}
+        <div className="bg-white/80 backdrop-blur-md p-6 rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-white flex flex-col">
+          <div className="flex justify-between items-center mb-6">
+             <h3 className="text-sm font-black text-slate-800 uppercase italic">Équipe</h3>
+             <Link href={`/dashboard/${id}/users`} className="text-indigo-600 text-[9px] font-black uppercase tracking-widest hover:underline">Gérer</Link>
+          </div>
+          
+          <div className="space-y-3 flex-1">
+            {collaborateurs.map((collab) => (
+              <div key={collab.id} className="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl border border-slate-100 group">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-indigo-600 font-black text-[10px] shadow-sm border border-slate-100">
+                    {collab.nom?.charAt(0) || "U"}
+                  </div>
+                  <div className="overflow-hidden">
+                    <p className="text-[10px] font-black text-slate-900 uppercase truncate">{collab.nom || "Membre"}</p>
+                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">{collab.role}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            
+            <Link 
+              href={`/dashboard/${id}/users`}
+              className="flex items-center justify-center gap-2 w-full p-4 border-2 border-dashed border-slate-100 rounded-xl text-slate-400 hover:text-indigo-600 hover:border-indigo-600 transition-all text-[9px] font-black uppercase mt-2"
+            >
+              <UserPlus size={14} />
+              Inviter
+            </Link>
+          </div>
+        </div>
+
+        {/* GRAPHIQUE (Prend 2 colonnes maintenant) */}
         <div className="lg:col-span-2 bg-white/80 backdrop-blur-md p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-white relative overflow-hidden">
           <div className="absolute top-0 right-0 p-8 opacity-10">
-            <Activity size={120} className="text-indigo-600" />
+            <Activity size={100} className="text-indigo-600" />
           </div>
           <h3 className="text-xl font-black text-slate-800 mb-8">Flux d'activité {exerciceCible?.code}</h3>
-          <div className="flex items-end justify-between h-64 gap-3">
+          <div className="flex items-end justify-between h-56 gap-2">
             {[60, 40, 95, 70, 55, 85, 100, 75, 50, 90, 65, 80].map((h, i) => (
               <div key={i} className="flex-1 flex flex-col items-center gap-3 group">
                 <div
                   style={{ height: `${h}%` }}
                   className="w-full bg-slate-100 group-hover:bg-gradient-to-t group-hover:from-indigo-600 group-hover:to-blue-400 rounded-2xl transition-all duration-500 shadow-sm"
                 />
-                <span className="text-[10px] font-black text-slate-400 group-hover:text-indigo-600 transition-colors">
+                <span className="text-[9px] font-black text-slate-400 group-hover:text-indigo-600 transition-colors">
                   {['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'][i]}
                 </span>
               </div>
@@ -174,16 +215,16 @@ export default async function DashboardReel({ params, searchParams }: Props) {
           </div>
         </div>
 
-        {/* CERCLE DE PROGRESSION */}
+        {/* CERCLE DE PROGRESSION (Prend 1 colonne) */}
         <div className="bg-slate-900 p-8 rounded-[2.5rem] shadow-2xl text-white flex flex-col items-center justify-between text-center border border-slate-800">
           <h3 className="text-lg font-bold mb-4 text-slate-400 uppercase tracking-widest text-[10px]">Objectif {exerciceCible?.code}</h3>
-          <div className="relative w-56 h-56">
+          <div className="relative w-44 h-44">
             <svg className="w-full h-full transform -rotate-90">
-              <circle cx="112" cy="112" r="90" stroke="#1e293b" strokeWidth="18" fill="transparent" />
+              <circle cx="88" cy="88" r="75" stroke="#1e293b" strokeWidth="14" fill="transparent" />
               <circle
-                cx="112" cy="112" r="90"
-                stroke="url(#dashboardGradient)" strokeWidth="18" fill="transparent"
-                strokeDasharray="565" strokeDashoffset={565 * (1 - pourcentageAtteint / 100)}
+                cx="88" cy="88" r="75"
+                stroke="url(#dashboardGradient)" strokeWidth="14" fill="transparent"
+                strokeDasharray="471" strokeDashoffset={471 * (1 - pourcentageAtteint / 100)}
                 strokeLinecap="round"
                 className="transition-all duration-1000 ease-out"
               />
@@ -195,15 +236,16 @@ export default async function DashboardReel({ params, searchParams }: Props) {
               </defs>
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-5xl font-black">{pourcentageAtteint}%</span>
-              <span className="text-indigo-400 text-[10px] font-bold tracking-widest uppercase mt-1">Atteint</span>
+              <span className="text-4xl font-black">{pourcentageAtteint}%</span>
+              <span className="text-indigo-400 text-[8px] font-bold tracking-widest uppercase mt-1">Atteint</span>
             </div>
           </div>
-          <div className="w-full mt-6 p-5 bg-white/5 rounded-[2rem] border border-white/10">
-            <p className="text-slate-400 text-xs font-medium mb-1">Cible de l'exercice</p>
-            <p className="text-white text-xl font-black">{objectif.toLocaleString('fr-FR')} €</p>
+          <div className="w-full mt-6 p-4 bg-white/5 rounded-[1.5rem] border border-white/10">
+            <p className="text-slate-400 text-[10px] font-medium mb-1 tracking-tighter">Cible de l'exercice</p>
+            <p className="text-white text-lg font-black">{objectif.toLocaleString('fr-FR')} €</p>
           </div>
         </div>
+
       </div>
     </div>
   );
