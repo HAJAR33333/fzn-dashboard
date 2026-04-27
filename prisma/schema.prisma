@@ -8,139 +8,183 @@ datasource db {
   provider = "postgresql"
 }
 
-// 1. Modèle Utilisateur (Propriétaires et Salariés)
+// 1. Modèle Utilisateur (Enrichi avec les nouveaux champs)
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  password      String?
-  nom           String?
-  role          Role      @default(OWNER) 
-  createdAt     DateTime  @default(now())
+  id       String  @id @default(cuid())
+  email    String  @unique // Email professionnel
+  password String?
+
+  // Identité
+  nom         String?
+  prenom      String? // Ajouté
+  telephone   String? // Ajouté (10 chiffres)
+  fonction    String? // Ajouté (Titre du poste)
+  dateArrivee DateTime? // Date à laquelle l'employé a rejoint l'entreprise
+
+  // Statut
+  isActive Boolean @default(true) // true = Actif, false = Inactif (Archivé)
+
+  // Véhicule
+  puissanceFiscale Int? // Puissance fiscale (CV) pour le barème IK
+
+  role      Role     @default(OWNER)
+  createdAt DateTime @default(now())
 
   // Relations
-  // 1. Les espaces dont il est le créateur/propriétaire principal
-  espacesOwned  Espace[]  @relation("OwnerRelation")
-
-  // 2. L'espace auquel il est rattaché en tant que salarié (utilisateur secondaire)
+  espacesOwned  Espace[] @relation("OwnerRelation")
   espaceId      String?
-  espaceTravail Espace?   @relation("CollaborateurRelation", fields: [espaceId], references: [id])
+  espaceTravail Espace?  @relation("CollaborateurRelation", fields: [espaceId], references: [id])
+
+  // NOUVEAU : Relation avec les frais
+  fraisKilometriques FraisKilometrique[]
 }
 
 // 2. Gestion Multi-Sociétés (Espaces)
 model Espace {
-  id              String    @id @default(cuid())
-  nom             String    // Dénomination sociale
-  siret           String    @unique
-  formeJuridique  String?   // SARL, SAS, etc.
-  
+  id             String  @id @default(cuid())
+  nom            String // Dénomination sociale
+  siret          String  @unique
+  formeJuridique String? // SARL, SAS, etc.
+
   // Dirigeant
   dirigeantPrenom String?
   dirigeantNom    String?
-  
-  // Adresse Siège
-  adresse         String?
-  codePostal      String?
-  ville           String?
-  pays            String?   @default("France")
-  
-  // Contact
-  email           String?
-  telephone       String?
 
-  couleur         String?   @default("#3b82f6")
-  createdAt       DateTime  @default(now())
-  
+  // Adresse Siège
+  adresse    String?
+  codePostal String?
+  ville      String?
+  pays       String? @default("France")
+
+  // Contact
+  email     String?
+  telephone String?
+
+  couleur   String?  @default("#3b82f6")
+  createdAt DateTime @default(now())
+
   // --- RELATIONS UTILISATEURS ---
   // Le propriétaire unique
-  userId          String?
-  owner           User?     @relation("OwnerRelation", fields: [userId], references: [id])
+  userId String?
+  owner  User?   @relation("OwnerRelation", fields: [userId], references: [id])
 
   // La liste des salariés / utilisateurs secondaires
-  collaborateurs  User[]    @relation("CollaborateurRelation")
+  collaborateurs User[] @relation("CollaborateurRelation")
 
   // --- BUSINESS LOGIC ---
-  exercices       Exercice[]
-  clients         Client[]
-  factures        Facture[]
+  exercices          Exercice[]
+  clients            Client[]
+  factures           Facture[]
+  fraisKilometriques FraisKilometrique[]
 }
 
 // 3. Exercice Comptable
 model Exercice {
-  id        String    @id @default(cuid())
-  code      String    // ex: 2025
+  id        String   @id @default(cuid())
+  code      String // ex: 2025
   dateDebut DateTime
   dateFin   DateTime
-  isActif   Boolean   @default(false)
-  objectif  Float     @default(0)
-  
-  espaceId  String
-  espace    Espace    @relation(fields: [espaceId], references: [id])
-  
-  factures  Facture[] 
+  isActif   Boolean  @default(false)
+  objectif  Float    @default(0)
 
-  @@unique([code, espaceId]) 
+  espaceId String
+  espace   Espace @relation(fields: [espaceId], references: [id])
+
+  factures Facture[]
+
+  @@unique([code, espaceId])
 }
 
 // 4. Modèle Client
 model Client {
-  id             String   @id @default(cuid())
-  nom            String   // Nom de l'entreprise
+  id             String  @id @default(cuid())
+  nom            String // Nom de l'entreprise
   formeJuridique String?
   contactPrenom  String?
   contactNom     String?
   adresse        String?
   codePostal     String?
   ville          String?
-  pays           String?  @default("France")
+  pays           String? @default("France")
   siret          String?
   email          String?
   telephone      String?
-  statutClient   String?  // ex: Prospect, Client actif
-  
-  espaceId       String
-  espace         Espace   @relation(fields: [espaceId], references: [id])
-  factures       Facture[]
+  statutClient   String? // ex: Prospect, Client actif
+
+  espaceId String
+  espace   Espace    @relation(fields: [espaceId], references: [id])
+  factures Facture[]
 }
 
 // 5. Modèle Devis & Factures
 model Facture {
-  id            String         @id @default(cuid())
-  numero        String         // ex: DEV-2025-001
-  type          DocumentType   @default(DEVIS)
-  statut        StatutFacture  @default(BROUILLON)
-  dateEmission  DateTime       @default(now())
-  dateEcheance  DateTime?
-  
-  montantHT     Float          @default(0)
-  montantTVA    Float          @default(0)
-  totalTTC      Float          @default(0)
+  id           String        @id @default(cuid())
+  numero       String // ex: DEV-2025-001
+  type         DocumentType  @default(DEVIS)
+  statut       StatutFacture @default(BROUILLON)
+  dateEmission DateTime      @default(now())
+  dateEcheance DateTime?
 
-  espaceId      String
-  espace        Espace         @relation(fields: [espaceId], references: [id])
-  
-  clientId      String
-  client        Client         @relation(fields: [clientId], references: [id])
-  
-  exerciceId    String
-  exercice      Exercice       @relation(fields: [exerciceId], references: [id])
+  montantHT  Float @default(0)
+  montantTVA Float @default(0)
+  totalTTC   Float @default(0)
 
-  lignes        LigneFacture[] 
-  
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  espaceId String
+  espace   Espace @relation(fields: [espaceId], references: [id])
+
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id])
+
+  exerciceId String
+  exercice   Exercice @relation(fields: [exerciceId], references: [id])
+
+  lignes LigneFacture[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // 6. Détail des lignes
 model LigneFacture {
-  id           String  @id @default(cuid())
+  id           String @id @default(cuid())
   designation  String
-  quantite     Float   @default(1)
+  quantite     Float  @default(1)
   prixUnitaire Float
-  remise       Float   @default(0) 
-  tva          Float   @default(20) 
-  
-  factureId    String
-  facture      Facture @relation(fields: [factureId], references: [id], onDelete: Cascade)
+  remise       Float  @default(0)
+  tva          Float  @default(20)
+
+  factureId String
+  facture   Facture @relation(fields: [factureId], references: [id], onDelete: Cascade)
+}
+
+model FraisKilometrique {
+  id        String      @id @default(cuid())
+  date      DateTime    @default(now())
+  clientNom String
+  distance  Float
+  taux      Float
+  montant   Float
+  statut    StatutFrais @default(EN_ATTENTE)
+
+  // Relation avec l'utilisateur
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Relation avec l'espace
+  espaceId String
+  espace   Espace @relation(fields: [espaceId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// --- AJOUT AUX ENUMS EXISTANTS ---
+
+enum StatutFrais {
+  EN_ATTENTE
+  VALIDE
+  REMBOURSE
+  REFUSE
 }
 
 // --- ENUMS ---
@@ -152,13 +196,13 @@ enum DocumentType {
 
 enum StatutFacture {
   BROUILLON
-  VALIDE    
-  PAYE      
+  VALIDE
+  PAYE
   ANNULE
 }
 
 enum Role {
-  OWNER         // Le créateur
-  MANAGER       // Manager
+  OWNER // Le créateur
+  MANAGER // Manager
   COLLABORATEUR // Au lieu de USER
 }

@@ -6,7 +6,9 @@ import {
   LayoutDashboard, 
   ChevronRight, 
   Users2, 
-  Settings 
+  Settings,
+  Car, 
+  PieChart
 } from 'lucide-react';
 import Link from 'next/link';
 import SidebarLinks from "./clients/_components/SidebarLinks";
@@ -86,21 +88,37 @@ export default async function DashboardLayout({
           <p className="text-[10px] font-black uppercase text-slate-400 mb-3 ml-2 tracking-widest">Menu Principal</p>
           <SidebarLinks id={id} />
 
-          {/* NOUVELLE SECTION : ADMINISTRATION */}
+          {/* SECTION : ADMINISTRATION & OPERATIONS */}
           <div className="mt-8 pt-6 border-t border-slate-50 space-y-1">
-            <p className="text-[10px] font-black uppercase text-slate-400 mb-4 ml-2 tracking-widest">Administration</p>
+            <p className="text-[10px] font-black uppercase text-slate-400 mb-4 ml-2 tracking-widest">Gestion RH & Frais</p>
             
+            {/* Utilisateurs */}
             <Link 
               href={`/dashboard/${id}/users`}
               className="flex items-center justify-between group px-4 py-3.5 rounded-2xl hover:bg-slate-950 hover:text-white transition-all duration-300"
             >
               <div className="flex items-center gap-3">
                 <Users2 className="w-5 h-5 text-slate-400 group-hover:text-indigo-400 transition-colors" />
-                <span className="font-bold text-[13px] tracking-tight uppercase italic">Utilisateurs</span>
+                <span className="font-bold text-[13px] tracking-tight uppercase italic">Collaborateurs</span>
               </div>
               <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
             </Link>
 
+            {/* Frais Kilométriques */}
+            <Link 
+              href={`/dashboard/${id}/frais`}
+              className="flex items-center justify-between group px-4 py-3.5 rounded-2xl hover:bg-slate-950 hover:text-white transition-all duration-300"
+            >
+              <div className="flex items-center gap-3">
+                <Car className="w-5 h-5 text-slate-400 group-hover:text-indigo-400 transition-colors" />
+                <span className="font-bold text-[13px] tracking-tight uppercase italic">Frais & IK</span>
+              </div>
+              <ChevronRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
+            </Link>
+
+            <p className="text-[10px] font-black uppercase text-slate-400 mb-4 mt-6 ml-2 tracking-widest">Configuration</p>
+
+            {/* Paramètres */}
             <Link 
               href={`/dashboard/${id}/settings`}
               className="flex items-center justify-between group px-4 py-3.5 rounded-2xl hover:bg-slate-950 hover:text-white transition-all duration-300"
